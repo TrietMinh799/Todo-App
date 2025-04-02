@@ -1,50 +1,101 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { XMarkIcon, MinusIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '@heroicons/react/24/outline';
+import { 
+  XMarkIcon, 
+  MinusIcon, 
+  ArrowsPointingOutIcon,
+  ArrowsPointingInIcon
+} from '@heroicons/react/24/outline';
+import { useTheme } from '../contexts/ThemeContext';
+
+// Update the window.electron type to match preload.js
+declare global {
+  interface Window {
+    electron?: {
+      onWindowStateChange: (callback: (maximized: boolean) => void) => void;
+      minimizeWindow: () => void;
+      maximizeWindow: () => void;
+      closeWindow: () => void;
+    };
+  }
+}
 
 interface TitleBarProps {
-  isDarkMode: boolean;
   isMaximized: boolean;
 }
 
-export const TitleBar: React.FC<TitleBarProps> = ({ isDarkMode, isMaximized }) => {
+export const TitleBar: React.FC<TitleBarProps> = ({ isMaximized }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+
+  const handleMinimize = () => {
+    window.electron?.minimizeWindow();
+  };
+
+  const handleMaximize = () => {
+    window.electron?.maximizeWindow();
+  };
+
+  const handleClose = () => {
+    window.electron?.closeWindow();
+  };
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`fixed top-0 left-0 right-0 h-12 flex items-center justify-between px-4 backdrop-blur-md bg-opacity-80 z-50 ${
-        isDarkMode ? 'bg-gray-900/80' : 'bg-white/80'
-      } border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}
+    <div 
+      className={`h-10 flex items-center justify-between px-4 select-none ${
+        isDarkMode ? 'bg-gray-800' : 'bg-gray-100'
+      }`}
+      style={{
+        backgroundColor: isDarkMode ? currentTheme.colors.surface : '#f3f4f6',
+      }}
     >
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center gap-2">
         <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.2 }}
-          className={`w-3 h-3 rounded-full ${isDarkMode ? 'bg-blue-500' : 'bg-blue-600'}`}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          className="w-3 h-3 rounded-full bg-red-500 cursor-pointer"
+          onClick={handleClose}
+          style={{ backgroundColor: currentTheme.colors.error }}
         />
-        <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-          Todo App
-        </span>
+        <motion.div
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          className="w-3 h-3 rounded-full bg-yellow-500 cursor-pointer"
+          onClick={handleMinimize}
+          style={{ backgroundColor: currentTheme.colors.warning }}
+        />
+        <motion.div
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          className="w-3 h-3 rounded-full bg-green-500 cursor-pointer"
+          onClick={handleMaximize}
+          style={{ backgroundColor: currentTheme.colors.success }}
+        />
       </div>
-      <div className="flex items-center space-x-1">
+
+      <div className="flex items-center gap-4">
         <motion.button
-          whileHover={{ scale: 1.1, backgroundColor: isDarkMode ? 'rgb(55, 65, 81)' : 'rgb(243, 244, 246)' }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => window.electron?.minimizeWindow()}
-          className={`p-2 rounded-lg transition-colors ${
-            isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={handleMinimize}
+          className={`p-1 rounded-lg ${
+            isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
           }`}
+          style={{
+            color: isDarkMode ? currentTheme.colors.textSecondary : '#4b5563',
+          }}
         >
           <MinusIcon className="w-4 h-4" />
         </motion.button>
         <motion.button
-          whileHover={{ scale: 1.1, backgroundColor: isDarkMode ? 'rgb(55, 65, 81)' : 'rgb(243, 244, 246)' }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => window.electron?.maximizeWindow()}
-          className={`p-2 rounded-lg transition-colors ${
-            isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={handleMaximize}
+          className={`p-1 rounded-lg ${
+            isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
           }`}
+          style={{
+            color: isDarkMode ? currentTheme.colors.textSecondary : '#4b5563',
+          }}
         >
           {isMaximized ? (
             <ArrowsPointingInIcon className="w-4 h-4" />
@@ -53,14 +104,19 @@ export const TitleBar: React.FC<TitleBarProps> = ({ isDarkMode, isMaximized }) =
           )}
         </motion.button>
         <motion.button
-          whileHover={{ scale: 1.1, backgroundColor: 'rgb(239, 68, 68)' }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => window.electron?.closeWindow()}
-          className="p-2 rounded-lg text-gray-400 hover:bg-red-500 hover:text-white transition-colors"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={handleClose}
+          className={`p-1 rounded-lg ${
+            isDarkMode ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-100 text-red-500'
+          }`}
+          style={{
+            color: isDarkMode ? currentTheme.colors.error : '#ef4444',
+          }}
         >
           <XMarkIcon className="w-4 h-4" />
         </motion.button>
       </div>
-    </motion.div>
+    </div>
   );
 };
