@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CheckCircleIcon, 
@@ -7,11 +7,23 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   PlusIcon,
-  XMarkIcon
+  XMarkIcon,
+  BellIcon,
+  BellSlashIcon,
+  TagIcon,
+  PlusSmallIcon
 } from '@heroicons/react/24/outline';
 import { CheckCircleIcon as CheckCircleSolidIcon } from '@heroicons/react/24/solid';
 import type { Todo, Priority, Category } from './TodoList';
 import { useTheme } from '../contexts/ThemeContext';
+import { ReminderSettings, Reminder } from './ReminderSettings';
+
+// Default reminder object
+const defaultReminder: Reminder = {
+  id: '',
+  time: '30min',
+  enabled: false,
+};
 
 interface TodoItemProps extends Todo {
   onToggle: (id: string) => void;
@@ -32,7 +44,8 @@ const categoryColors: Record<Category, { bg: string; text: string }> = {
   health: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-400' },
 };
 
-export const TodoItem: React.FC<TodoItemProps> = ({
+// Memoize the TodoItem component
+export const TodoItem = memo<TodoItemProps>(({
   id,
   text,
   completed,
@@ -40,6 +53,8 @@ export const TodoItem: React.FC<TodoItemProps> = ({
   priority,
   dueDate,
   subtasks,
+  reminder = defaultReminder,
+  tags = [],
   onToggle,
   onDelete,
   onUpdate,
@@ -49,15 +64,19 @@ export const TodoItem: React.FC<TodoItemProps> = ({
   const [editedText, setEditedText] = useState(text);
   const [showSubtasks, setShowSubtasks] = useState(false);
   const [newSubtask, setNewSubtask] = useState('');
+  const [showReminderSettings, setShowReminderSettings] = useState(false);
+  const [showTagInput, setShowTagInput] = useState(false);
+  const [newTag, setNewTag] = useState('');
 
-  const handleEdit = () => {
+  // Memoize handlers
+  const handleEdit = useCallback(() => {
     if (isEditing) {
       onUpdate(id, { text: editedText });
     }
     setIsEditing(!isEditing);
-  };
+  }, [isEditing, editedText, id, onUpdate]);
 
-  const handleAddSubtask = (e: React.FormEvent) => {
+  const handleAddSubtask = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubtask.trim()) return;
 
@@ -69,19 +88,66 @@ export const TodoItem: React.FC<TodoItemProps> = ({
 
     onUpdate(id, { subtasks: [...subtasks, newSubtaskObj] });
     setNewSubtask('');
-  };
+  }, [newSubtask, id, subtasks, onUpdate]);
 
-  const toggleSubtask = (subtaskId: string) => {
+  const toggleSubtask = useCallback((subtaskId: string) => {
     const updatedSubtasks = subtasks.map((subtask) =>
       subtask.id === subtaskId ? { ...subtask, completed: !subtask.completed } : subtask
     );
     onUpdate(id, { subtasks: updatedSubtasks });
-  };
+  }, [id, subtasks, onUpdate]);
 
-  const deleteSubtask = (subtaskId: string) => {
+  const deleteSubtask = useCallback((subtaskId: string) => {
     const updatedSubtasks = subtasks.filter((subtask) => subtask.id !== subtaskId);
     onUpdate(id, { subtasks: updatedSubtasks });
-  };
+  }, [id, subtasks, onUpdate]);
+
+  const handleReminderUpdate = useCallback((updatedReminder: Reminder) => {
+    onUpdate(id, { 
+      reminder: {
+        ...updatedReminder,
+        id: reminder.id || `${id}-reminder`,
+      }
+    });
+  }, [id, reminder.id, onUpdate]);
+
+  const toggleReminder = useCallback(() => {
+    onUpdate(id, {
+      reminder: {
+        ...reminder,
+        id: reminder.id || `${id}-reminder`,
+        enabled: !reminder.enabled,
+      },
+    });
+  }, [id, reminder, onUpdate]);
+
+  const handleAddTag = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTag.trim()) return;
+
+    const tagToAdd = newTag.trim().toLowerCase();
+    if (!tags.includes(tagToAdd)) {
+      onUpdate(id, { tags: [...tags, tagToAdd] });
+    }
+    setNewTag('');
+    setShowTagInput(false);
+  }, [newTag, id, tags, onUpdate]);
+
+  const handleRemoveTag = useCallback((tagToRemove: string) => {
+    onUpdate(id, { tags: tags.filter(tag => tag !== tagToRemove) });
+  }, [id, tags, onUpdate]);
+
+  // Memoize styles
+  const containerStyle = useMemo(() => ({
+    backgroundColor: isDarkMode ? currentTheme.colors.surface : 'white',
+    borderColor: isDarkMode ? currentTheme.colors.border : '#e5e7eb',
+  }), [isDarkMode, currentTheme.colors.surface, currentTheme.colors.border]);
+
+  const textStyle = useMemo(() => ({
+    color: completed 
+      ? isDarkMode ? currentTheme.colors.textSecondary : '#6b7280' 
+      : isDarkMode ? currentTheme.colors.text : '#111827',
+  }), [completed, isDarkMode, currentTheme.colors.text, currentTheme.colors.textSecondary]);
 
   return (
     <motion.div
@@ -94,10 +160,7 @@ export const TodoItem: React.FC<TodoItemProps> = ({
       } shadow-lg border ${
         isDarkMode ? 'border-gray-700' : 'border-gray-200'
       }`}
-      style={{
-        backgroundColor: isDarkMode ? currentTheme.colors.surface : 'white',
-        borderColor: isDarkMode ? currentTheme.colors.border : '#e5e7eb',
-      }}
+      style={containerStyle}
     >
       <div className="p-4">
         <div className="flex items-start gap-3">
@@ -129,11 +192,7 @@ export const TodoItem: React.FC<TodoItemProps> = ({
             ) : (
               <div 
                 className={`text-lg ${completed ? 'line-through text-gray-500' : isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}
-                style={{
-                  color: completed 
-                    ? isDarkMode ? currentTheme.colors.textSecondary : '#6b7280' 
-                    : isDarkMode ? currentTheme.colors.text : '#111827',
-                }}
+                style={textStyle}
               >
                 {text}
               </div>
@@ -179,64 +238,89 @@ export const TodoItem: React.FC<TodoItemProps> = ({
                   {new Date(dueDate).toLocaleDateString()}
                 </span>
               )}
+              {reminder.enabled && dueDate && (
+                <span 
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
+                  }`}
+                  style={{
+                    backgroundColor: isDarkMode ? `${currentTheme.colors.primary}20` : '#dbeafe',
+                    color: isDarkMode ? currentTheme.colors.primary : '#1d4ed8',
+                  }}
+                >
+                  <BellIcon className="w-3 h-3 inline mr-1" />
+                  {reminder.time === 'custom' 
+                    ? `${reminder.customTime} min before` 
+                    : reminder.time === '5min' ? '5 min before' :
+                      reminder.time === '15min' ? '15 min before' :
+                      reminder.time === '30min' ? '30 min before' :
+                      reminder.time === '1hour' ? '1 hour before' :
+                      '1 day before'}
+                </span>
+              )}
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${
+                    isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                  }`}
+                  style={{
+                    backgroundColor: isDarkMode ? `${currentTheme.colors.secondary}20` : '#f3f4f6',
+                    color: isDarkMode ? currentTheme.colors.secondary : '#4b5563',
+                  }}
+                >
+                  <TagIcon className="w-3 h-3" />
+                  {tag}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveTag(tag);
+                    }}
+                    className="ml-1 hover:text-red-500"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {showTagInput ? (
+                <form onSubmit={handleAddTag} className="inline-flex">
+                  <input
+                    type="text"
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    placeholder="Add tag..."
+                    className={`px-2 py-1 text-xs rounded-full ${
+                      isDarkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-200'
+                    } border focus:outline-none focus:ring-1 focus:ring-blue-500`}
+                    style={{
+                      backgroundColor: isDarkMode ? currentTheme.colors.surface : '#f9fafb',
+                      borderColor: isDarkMode ? currentTheme.colors.border : '#e5e7eb',
+                      color: isDarkMode ? currentTheme.colors.text : '#111827',
+                    }}
+                    autoFocus
+                    onBlur={() => {
+                      if (!newTag) setShowTagInput(false);
+                    }}
+                  />
+                </form>
+              ) : (
+                <button
+                  onClick={() => setShowTagInput(true)}
+                  className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${
+                    isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                  style={{
+                    backgroundColor: isDarkMode ? `${currentTheme.colors.secondary}20` : '#f3f4f6',
+                    color: isDarkMode ? currentTheme.colors.secondary : '#4b5563',
+                  }}
+                >
+                  <PlusSmallIcon className="w-4 h-4" />
+                  Add Tag
+                </button>
+              )}
             </div>
 
-            {subtasks.length > 0 && (
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setShowSubtasks(!showSubtasks)}
-                className={`mt-2 flex items-center gap-1 text-sm ${
-                  isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
-                }`}
-                style={{
-                  color: isDarkMode ? currentTheme.colors.textSecondary : '#6b7280',
-                }}
-              >
-                {showSubtasks ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
-                {subtasks.length} subtask{subtasks.length !== 1 ? 's' : ''}
-              </motion.button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={handleEdit}
-              className={`p-1 rounded-full ${
-                isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
-              }`}
-              style={{
-                color: isDarkMode ? currentTheme.colors.textSecondary : '#6b7280',
-              }}
-            >
-              <PencilIcon className="w-5 h-5" />
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => onDelete(id)}
-              className={`p-1 rounded-full ${
-                isDarkMode ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-100 text-red-500'
-              }`}
-              style={{
-                color: isDarkMode ? currentTheme.colors.error : '#ef4444',
-              }}
-            >
-              <TrashIcon className="w-5 h-5" />
-            </motion.button>
-          </div>
-        </div>
-
-        <AnimatePresence>
-          {showSubtasks && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mt-4 pl-9"
-            >
+            <div className="mt-4">
               <form onSubmit={handleAddSubtask} className="mb-3">
                 <div className="flex gap-2">
                   <input
@@ -326,10 +410,86 @@ export const TodoItem: React.FC<TodoItemProps> = ({
                   </motion.div>
                 ))}
               </div>
-            </motion.div>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowSubtasks(!showSubtasks)}
+                className={`flex items-center gap-1 text-sm ${
+                  isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
+                }`}
+                style={{
+                  color: isDarkMode ? currentTheme.colors.textSecondary : '#6b7280',
+                }}
+              >
+                {showSubtasks ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                {subtasks.length} subtask{subtasks.length !== 1 ? 's' : ''}
+              </motion.button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {dueDate && (
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setShowReminderSettings(!showReminderSettings)}
+                className={`p-1 rounded-full ${
+                  reminder.enabled
+                    ? isDarkMode ? 'text-blue-400 hover:bg-blue-900/30' : 'text-blue-500 hover:bg-blue-100'
+                    : isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
+                }`}
+                style={{
+                  color: reminder.enabled
+                    ? currentTheme.colors.primary
+                    : isDarkMode ? currentTheme.colors.textSecondary : '#6b7280',
+                }}
+              >
+                {reminder.enabled ? <BellIcon className="w-5 h-5" /> : <BellSlashIcon className="w-5 h-5" />}
+              </motion.button>
+            )}
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={handleEdit}
+              className={`p-1 rounded-full ${
+                isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+              }`}
+              style={{
+                color: isDarkMode ? currentTheme.colors.textSecondary : '#6b7280',
+              }}
+            >
+              <PencilIcon className="w-5 h-5" />
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => onDelete(id)}
+              className={`p-1 rounded-full ${
+                isDarkMode ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-100 text-red-500'
+              }`}
+              style={{
+                color: isDarkMode ? currentTheme.colors.error : '#ef4444',
+              }}
+            >
+              <TrashIcon className="w-5 h-5" />
+            </motion.button>
+          </div>
+        </div>
+
+        <AnimatePresence>
+          {showReminderSettings && (
+            <ReminderSettings
+              reminder={reminder}
+              onUpdate={handleReminderUpdate}
+              onClose={() => setShowReminderSettings(false)}
+            />
           )}
         </AnimatePresence>
       </div>
     </motion.div>
   );
-}; 
+});
+
+// Add display name for better debugging
+TodoItem.displayName = 'TodoItem'; 

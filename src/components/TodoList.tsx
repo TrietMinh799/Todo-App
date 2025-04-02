@@ -1,5 +1,5 @@
-import React, { useState, useEffect, Suspense } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, AdjustmentsHorizontalIcon, SunIcon, MoonIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect, Suspense, useCallback, useMemo } from 'react';
+import { PlusIcon, MagnifyingGlassIcon, AdjustmentsHorizontalIcon, SunIcon, MoonIcon, TagIcon } from '@heroicons/react/24/outline';
 import { AnimatePresence, motion } from 'framer-motion';
 import { TodoItem } from './TodoItem';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -7,6 +7,9 @@ import { StatusBar } from './StatusBar';
 import { TitleBar } from './TitleBar';
 import { ThemeSelector } from './ThemeSelector';
 import { useTheme } from '../contexts/ThemeContext';
+import { Reminder } from './ReminderSettings';
+import { notificationService } from '../services/notificationService';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 // Declare window.electron type
 declare global {
@@ -32,20 +35,109 @@ export interface Todo {
   dueDate: string | null;
   subtasks: { id: string; text: string; completed: boolean }[];
   createdAt: string;
+  reminder: Reminder;
+  tags: string[];
 }
+
+// Default reminder object
+const defaultReminder: Reminder = {
+  id: '',
+  time: '30min',
+  enabled: false,
+};
 
 export const TodoList = () => {
   const { isDarkMode, toggleDarkMode } = useTheme();
   const [todos, setTodos] = useState<Todo[]>(() => {
     const savedTodos = localStorage.getItem('todos');
-    return savedTodos ? JSON.parse(savedTodos) : [];
+    if (savedTodos) {
+      const parsedTodos = JSON.parse(savedTodos);
+      return parsedTodos.map((todo: Todo) => ({
+        ...todo,
+        reminder: todo.reminder || {
+          ...defaultReminder,
+          id: `${todo.id}-reminder`,
+        },
+        tags: todo.tags || [],
+      }));
+    }
+    return [];
   });
   const [newTodo, setNewTodo] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'all'>('all');
   const [selectedPriority, setSelectedPriority] = useState<Priority | 'all'>('all');
+  const [selectedTag, setSelectedTag] = useState<string | 'all'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+
+  // Memoize filtered todos to prevent unnecessary re-renders
+  const filteredTodos = useMemo(() => {
+    return todos.filter((todo) => {
+      const matchesSearch = todo.text.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || todo.category === selectedCategory;
+      const matchesPriority = selectedPriority === 'all' || todo.priority === selectedPriority;
+      const matchesTag = selectedTag === 'all' || todo.tags.includes(selectedTag);
+      return matchesSearch && matchesCategory && matchesPriority && matchesTag;
+    });
+  }, [todos, searchQuery, selectedCategory, selectedPriority, selectedTag]);
+
+  // Memoize unique tags
+  const allTags = useMemo(() => 
+    Array.from(new Set(todos.flatMap(todo => todo.tags))),
+    [todos]
+  );
+
+  // Memoize handlers
+  const handleAddTodo = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTodo.trim()) return;
+
+    const todoId = Date.now().toString();
+    const todo: Todo = {
+      id: todoId,
+      text: newTodo.trim(),
+      completed: false,
+      category: 'personal',
+      priority: 'medium',
+      dueDate: null,
+      subtasks: [],
+      createdAt: new Date().toISOString(),
+      reminder: {
+        ...defaultReminder,
+        id: `${todoId}-reminder`,
+      },
+      tags: [],
+    };
+
+    setTodos(prev => [todo, ...prev]);
+    setNewTodo('');
+  }, [newTodo]);
+
+  const handleToggleTodo = useCallback((id: string) => {
+    setTodos(prev => prev.map(todo =>
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo
+    ));
+  }, []);
+
+  const handleDeleteTodo = useCallback((id: string) => {
+    setTodos(prev => prev.filter(todo => todo.id !== id));
+  }, []);
+
+  const handleUpdateTodo = useCallback((id: string, updates: Partial<Todo>) => {
+    setTodos(prev => prev.map(todo =>
+      todo.id === id ? { ...todo, ...updates } : todo
+    ));
+  }, []);
+
+  // Setup virtualization
+  const parentRef = React.useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: filteredTodos.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 200, // Estimated height of each todo item
+    overscan: 5,
+  });
 
   useEffect(() => {
     localStorage.setItem('todos', JSON.stringify(todos));
@@ -57,52 +149,6 @@ export const TodoList = () => {
       setIsMaximized(maximized);
     });
   }, []);
-
-  const addTodo = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTodo.trim()) return;
-
-    const todo: Todo = {
-      id: Date.now().toString(),
-      text: newTodo.trim(),
-      completed: false,
-      category: 'personal',
-      priority: 'medium',
-      dueDate: null,
-      subtasks: [],
-      createdAt: new Date().toISOString(),
-    };
-
-    setTodos([todo, ...todos]);
-    setNewTodo('');
-  };
-
-  const toggleTodo = (id: string) => {
-    setTodos(
-      todos.map((todo) =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
-      )
-    );
-  };
-
-  const deleteTodo = (id: string) => {
-    setTodos(todos.filter((todo) => todo.id !== id));
-  };
-
-  const updateTodo = (id: string, updates: Partial<Todo>) => {
-    setTodos(
-      todos.map((todo) =>
-        todo.id === id ? { ...todo, ...updates } : todo
-      )
-    );
-  };
-
-  const filteredTodos = todos.filter((todo) => {
-    const matchesSearch = todo.text.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || todo.category === selectedCategory;
-    const matchesPriority = selectedPriority === 'all' || todo.priority === selectedPriority;
-    return matchesSearch && matchesCategory && matchesPriority;
-  });
 
   return (
     <div className={`min-h-screen ${isDarkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
@@ -136,7 +182,7 @@ export const TodoList = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          onSubmit={addTodo}
+          onSubmit={handleAddTodo}
           className="mb-8"
         >
           <div className="flex gap-3">
@@ -233,32 +279,69 @@ export const TodoList = () => {
                     <option value="high">High</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Tags</label>
+                  <select
+                    value={selectedTag}
+                    onChange={(e) => setSelectedTag(e.target.value)}
+                    className={`select w-full ${
+                      isDarkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-200'
+                    }`}
+                  >
+                    <option value="all">All Tags</option>
+                    {allTags.map((tag) => (
+                      <option key={tag} value={tag}>{tag}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <Suspense fallback={<LoadingSpinner isDarkMode={isDarkMode} />}>
-          <AnimatePresence mode="popLayout">
-            {filteredTodos.map((todo, index) => (
-              <motion.div
-                key={todo.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, x: -100 }}
-                transition={{ delay: index * 0.05 }}
-                className="mb-3"
-              >
-                <TodoItem
-                  {...todo}
-                  onToggle={toggleTodo}
-                  onDelete={deleteTodo}
-                  onUpdate={updateTodo}
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </Suspense>
+        {/* Virtualized Todo List */}
+        <div
+          ref={parentRef}
+          className="h-[calc(100vh-300px)] overflow-auto"
+        >
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            <AnimatePresence mode="popLayout">
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const todo = filteredTodos[virtualRow.index];
+                return (
+                  <motion.div
+                    key={todo.id}
+                    layout
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -100 }}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <TodoItem
+                      {...todo}
+                      onToggle={handleToggleTodo}
+                      onDelete={handleDeleteTodo}
+                      onUpdate={handleUpdateTodo}
+                    />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        </div>
 
         {filteredTodos.length === 0 && (
           <motion.div
@@ -271,7 +354,7 @@ export const TodoList = () => {
             <div className="text-6xl mb-4">📝</div>
             <p className="text-lg mb-2">No tasks found</p>
             <p className="text-sm">
-              {searchQuery || selectedCategory !== 'all' || selectedPriority !== 'all'
+              {searchQuery || selectedCategory !== 'all' || selectedPriority !== 'all' || selectedTag !== 'all'
                 ? 'Try adjusting your filters'
                 : 'Add a new task to get started!'}
             </p>

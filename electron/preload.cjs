@@ -10,6 +10,11 @@ contextBridge.exposeInMainWorld(
     closeWindow: () => ipcRenderer.send('close-window'),
     onWindowStateChange: (callback) => {
       ipcRenderer.on('window-state-changed', (_, maximized) => callback(maximized));
-    }
+    },
+    
+    showNotification: (title, body) => ipcRenderer.send('show-notification', { title, body }),
+    scheduleNotification: (id, title, body, delay) => 
+      ipcRenderer.send('schedule-notification', { id, title, body, delay }),
+    cancelNotification: (id) => ipcRenderer.send('cancel-notification', { id }),
   }
-);
+); 
