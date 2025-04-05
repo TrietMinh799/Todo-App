@@ -1,5 +1,5 @@
-import React, { useState, useEffect, Suspense, useCallback, useMemo } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, AdjustmentsHorizontalIcon, SunIcon, MoonIcon, TagIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { PlusIcon, MagnifyingGlassIcon, AdjustmentsHorizontalIcon, SunIcon, MoonIcon } from '@heroicons/react/24/outline';
 import { AnimatePresence, motion } from 'framer-motion';
 import { TodoItem } from './TodoItem';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -10,6 +10,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Reminder } from './ReminderSettings';
 import { notificationService } from '../services/notificationService';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { debounce } from 'lodash';
 
 // Declare window.electron type
 declare global {
@@ -83,7 +84,7 @@ export const TodoList = () => {
   }, [todos, searchQuery, selectedCategory, selectedPriority, selectedTag]);
 
   // Memoize unique tags
-  const allTags = useMemo(() => 
+  const allTags = useMemo(() =>
     Array.from(new Set(todos.flatMap(todo => todo.tags))),
     [todos]
   );
@@ -131,13 +132,34 @@ export const TodoList = () => {
   }, []);
 
   // Setup virtualization
-  const parentRef = React.useRef<HTMLDivElement>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
+  // Update the virtualizer configuration to increase item height
+  const [expandedTodos, setExpandedTodos] = useState<Record<string, boolean>>({});
+
+  // Update virtualizer to use dynamic sizing
+  // Update the virtualizer configuration
   const rowVirtualizer = useVirtualizer({
     count: filteredTodos.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 200, // Estimated height of each todo item
-    overscan: 5,
+    estimateSize: useCallback((index: number) => {
+      const todo = filteredTodos[index];
+      const baseHeight = 160; // Base height for collapsed items
+      const subtaskHeight = 40; // Height per subtask
+      const expandedHeight = baseHeight + (todo.subtasks.length * subtaskHeight);
+      return expandedTodos[todo.id] ? expandedHeight : baseHeight;
+    }, [filteredTodos, expandedTodos]),
+    overscan: 10,
+    paddingStart: 16,
+    paddingEnd: 16,
   });
+
+  // Add handler for toggling expansion
+  const handleToggleExpand = useCallback((id: string) => {
+    setExpandedTodos(prev => ({
+      ...prev,
+      [id]: !prev[id] // Toggle the expanded state
+    }));
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('todos', JSON.stringify(todos));
@@ -150,17 +172,81 @@ export const TodoList = () => {
     });
   }, []);
 
+  // Debounce search query
+  const debouncedSetSearchQuery = useCallback(debounce((value: string) => {
+    setSearchQuery(value);
+  }, 300), []);
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    debouncedSetSearchQuery(e.target.value);
+  }, [debouncedSetSearchQuery]);
+
+  // Check for due reminders
+  useEffect(() => {
+    const now = new Date();
+    const interval = setInterval(() => {
+      todos.forEach((todo) => {
+        if (todo.reminder.enabled && todo.dueDate) {
+          const dueDate = new Date(todo.dueDate);
+          let reminderTime = new Date(dueDate);
+
+          switch (todo.reminder.time) {
+            case '5min':
+              reminderTime.setMinutes(dueDate.getMinutes() - 5);
+              break;
+            case '15min':
+              reminderTime.setMinutes(dueDate.getMinutes() - 15);
+              break;
+            case '30min':
+              reminderTime.setMinutes(dueDate.getMinutes() - 30);
+              break;
+            case '1hour':
+              reminderTime.setHours(dueDate.getHours() - 1);
+              break;
+            case '1day':
+              reminderTime.setDate(dueDate.getDate() - 1);
+              break;
+            case 'custom':
+              if (todo.reminder.customTime) {
+                reminderTime.setMinutes(dueDate.getMinutes() - todo.reminder.customTime);
+              }
+              break;
+          }
+
+          if (now >= reminderTime && now < new Date(reminderTime.getTime() + 60000)) {
+            notificationService.showNotification(
+              'Reminder', // Title
+              `Task: ${todo.text} is due soon!` // Body
+            );
+          }
+
+        }
+      });
+    }, 60000); // Check every minute
+
+    return () => clearInterval(interval);
+  }, [todos]);
+
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+    <div
+      className={`min-h-screen ${isDarkMode ? 'dark' : ''}`}
+      style={{
+        background: isDarkMode
+          ? 'linear-gradient(135deg, #1e1e2f, #111827)'
+          : 'linear-gradient(135deg, #f9fafb, #e5e7eb)',
+      }}
+    >
       <TitleBar isMaximized={isMaximized} />
-      
+
       <div className="max-w-3xl mx-auto p-6 pb-16 pt-20">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex justify-between items-center mb-8"
         >
-          <div className={`text-lg font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+          <div
+            className={`text-2xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}
+          >
             My Tasks
           </div>
           <div className="flex items-center gap-3">
@@ -169,9 +255,7 @@ export const TodoList = () => {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
               onClick={toggleDarkMode}
-              className={`p-2 rounded-full ${
-                isDarkMode ? 'bg-gray-800 text-yellow-400' : 'bg-white text-gray-700'
-              } shadow-md`}
+              className={`icon-button ${isDarkMode ? 'bg-gray-800 text-yellow-400' : 'bg-white text-gray-700'}`}
             >
               {isDarkMode ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
             </motion.button>
@@ -191,15 +275,13 @@ export const TodoList = () => {
               value={newTodo}
               onChange={(e) => setNewTodo(e.target.value)}
               placeholder="Add a new task..."
-              className={`input flex-1 ${
-                isDarkMode ? 'bg-gray-800 text-white border-gray-700' : 'bg-white border-gray-200'
-              } shadow-sm`}
+              className="input flex-1 shadow-md hover:shadow-lg transition-all"
             />
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               type="submit"
-              className="btn-primary flex items-center gap-2 px-4"
+              className="btn-primary flex items-center gap-2 px-4 shadow-md hover:shadow-lg"
             >
               <PlusIcon className="w-5 h-5" />
               Add
@@ -221,18 +303,14 @@ export const TodoList = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search tasks..."
-                className={`input pl-10 w-full ${
-                  isDarkMode ? 'bg-gray-800 text-white border-gray-700' : 'bg-white border-gray-200'
-                } shadow-sm`}
+                className="input pl-10 w-full shadow-md hover:shadow-lg transition-all"
               />
             </div>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowFilters(!showFilters)}
-              className={`btn-secondary ${
-                showFilters ? 'bg-blue-500 text-white' : ''
-              }`}
+              className={`btn-secondary ${showFilters ? 'bg-primary-500 text-white' : ''} shadow-md hover:shadow-lg`}
             >
               <AdjustmentsHorizontalIcon className="w-5 h-5" />
             </motion.button>
@@ -245,17 +323,15 @@ export const TodoList = () => {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="mb-6 p-4 rounded-lg bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700"
+              className="card mb-6 p-4 shadow-md hover:shadow-lg transition-all"
             >
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">Category</label>
+                  <label className="block text-sm font-medium mb-2 dark:text-gray-300">Category</label>
                   <select
                     value={selectedCategory}
                     onChange={(e) => setSelectedCategory(e.target.value as Category | 'all')}
-                    className={`select w-full ${
-                      isDarkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-200'
-                    }`}
+                    className="input shadow-md hover:shadow-lg transition-all"
                   >
                     <option value="all">All Categories</option>
                     <option value="personal">Personal</option>
@@ -265,13 +341,11 @@ export const TodoList = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">Priority</label>
+                  <label className="block text-sm font-medium mb-2 dark:text-gray-300">Priority</label>
                   <select
                     value={selectedPriority}
                     onChange={(e) => setSelectedPriority(e.target.value as Priority | 'all')}
-                    className={`select w-full ${
-                      isDarkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-200'
-                    }`}
+                    className="input shadow-md hover:shadow-lg transition-all"
                   >
                     <option value="all">All Priorities</option>
                     <option value="low">Low</option>
@@ -279,67 +353,59 @@ export const TodoList = () => {
                     <option value="high">High</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Tags</label>
-                  <select
-                    value={selectedTag}
-                    onChange={(e) => setSelectedTag(e.target.value)}
-                    className={`select w-full ${
-                      isDarkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-200'
-                    }`}
-                  >
-                    <option value="all">All Tags</option>
-                    {allTags.map((tag) => (
-                      <option key={tag} value={tag}>{tag}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Virtualized Todo List */}
         <div
           ref={parentRef}
-          className="h-[calc(100vh-300px)] overflow-auto"
+          className="h-[calc(100vh-400px)] overflow-auto px-2"
         >
           <div
             style={{
               height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
               position: 'relative',
+              width: '100%',
             }}
           >
-            <AnimatePresence mode="popLayout">
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const todo = filteredTodos[virtualRow.index];
-                return (
-                  <motion.div
-                    key={todo.id}
-                    layout
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, x: -100 }}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const todo = filteredTodos[virtualRow.index];
+              if (!todo) return null; // Guard against undefined todos
+
+              return (
+                // Update the todo item container with increased padding
+                <motion.div
+                  key={todo.id}
+                  ref={(el) => {
+                    if (el) rowVirtualizer.measureElement(el);
+                  }}
+                  data-index={virtualRow.index}
+                  data-key={todo.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  style={{
+                    position: 'absolute',
+                    top: `${virtualRow.start}px`,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualRow.size}px`,
+                    padding: '16px 0', // Increased from 8px 0
+                  }}
+                >
+                  <div className="h-full bg-gray-800/40 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-700/50">
                     <TodoItem
-                      {...todo}
+                      todo={todo}
                       onToggle={handleToggleTodo}
                       onDelete={handleDeleteTodo}
                       onUpdate={handleUpdateTodo}
+                      onToggleExpand={handleToggleExpand} // Pass the function here
+                      isExpanded={!!expandedTodos[todo.id]} // Pass the expanded state here
                     />
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
 
@@ -347,9 +413,8 @@ export const TodoList = () => {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className={`text-center py-12 ${
-              isDarkMode ? 'text-gray-400' : 'text-gray-500'
-            }`}
+            className={`text-center py-12 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
+              }`}
           >
             <div className="text-6xl mb-4">📝</div>
             <p className="text-lg mb-2">No tasks found</p>
@@ -365,4 +430,4 @@ export const TodoList = () => {
       <StatusBar isDarkMode={isDarkMode} />
     </div>
   );
-}; 
+};
