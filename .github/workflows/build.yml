@@ -23,7 +23,7 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
-        # Remove the cache option since we're using Bun
+        cache: 'npm'  # Enable caching for npm dependencies
     
     - name: Install Bun
       uses: oven-sh/setup-bun@v1
