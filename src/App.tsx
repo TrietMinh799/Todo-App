@@ -1,21 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { TodoList } from './components/TodoList';
+import { useTheme } from './contexts/ThemeContext';
 
 function App() {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    return localStorage.getItem('darkMode') === 'true';
-  });
+  const { isDarkMode, currentTheme } = useTheme();
 
   useEffect(() => {
-    localStorage.setItem('darkMode', isDarkMode.toString());
-    document.documentElement.classList.toggle('dark', isDarkMode);
-  }, [isDarkMode]);
+    // Apply theme background to the body element
+    document.body.style.backgroundColor = isDarkMode 
+      ? currentTheme.colors.background 
+      : '#f9fafb';
+  }, [isDarkMode, currentTheme]);
 
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'dark' : ''}`}>
+    <div 
+      className={`min-h-screen ${isDarkMode ? 'dark' : ''}`}
+      style={{
+        backgroundColor: isDarkMode ? currentTheme.colors.background : '#f9fafb',
+        color: isDarkMode ? currentTheme.colors.text : '#111827',
+      }}
+    >
       <TodoList />
     </div>
   );
 }
 
-export default App; 
+export default App;

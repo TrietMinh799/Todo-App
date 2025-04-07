@@ -4,19 +4,16 @@ import {
   CheckCircleIcon,
   TrashIcon,
   PencilIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  PlusIcon,
   XMarkIcon,
   BellIcon,
   BellSlashIcon,
-  TagIcon,
-  PlusSmallIcon
+  PlusSmallIcon,
 } from '@heroicons/react/24/outline';
-import { CheckCircleIcon as CheckCircleSolidIcon } from '@heroicons/react/24/solid';
+import { CheckCircleIcon as CheckCircleSolidIcon, PlusCircleIcon } from '@heroicons/react/24/solid';
 import type { Todo, Priority, Category } from './TodoList';
 import { useTheme } from '../contexts/ThemeContext';
 import { ReminderSettings, Reminder } from './ReminderSettings';
+import { EyeIcon } from '@heroicons/react/24/outline'; // Add this import
 
 // Default reminder object
 const defaultReminder: Reminder = {
@@ -30,8 +27,7 @@ interface TodoItemProps {
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, updates: Partial<Todo>) => void;
-  onToggleExpand?: (id: string) => void; // Add this line
-  isExpanded?: boolean; // Add this line
+  onViewDetails: (id: string) => void; // Add this prop
 }
 
 const priorityColors: Record<Priority, { bg: string; text: string }> = {
@@ -59,8 +55,7 @@ export const TodoItem = memo<TodoItemProps>(({
   onToggle,
   onDelete,
   onUpdate,
-  onToggleExpand,
-  isExpanded,
+  onViewDetails // Add this parameter
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
@@ -89,32 +84,6 @@ export const TodoItem = memo<TodoItemProps>(({
     }
     setIsEditing(!isEditing);
   }, [isEditing, editedText, id, onUpdate]);
-
-  const handleAddSubtask = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSubtask.trim()) return;
-
-    const newSubtaskObj = {
-      id: Date.now().toString(),
-      text: newSubtask.trim(),
-      completed: false,
-    };
-
-    onUpdate(id, { subtasks: [...subtasks, newSubtaskObj] });
-    setNewSubtask('');
-  }, [newSubtask, id, subtasks, onUpdate]);
-
-  const toggleSubtask = useCallback((subtaskId: string) => {
-    const updatedSubtasks = subtasks.map((subtask) =>
-      subtask.id === subtaskId ? { ...subtask, completed: !subtask.completed } : subtask
-    );
-    onUpdate(id, { subtasks: updatedSubtasks });
-  }, [id, subtasks, onUpdate]);
-
-  const deleteSubtask = useCallback((subtaskId: string) => {
-    const updatedSubtasks = subtasks.filter((subtask) => subtask.id !== subtaskId);
-    onUpdate(id, { subtasks: updatedSubtasks });
-  }, [id, subtasks, onUpdate]);
 
   const handleReminderUpdate = useCallback((updatedReminder: Reminder) => {
     onUpdate(id, {
@@ -169,19 +138,16 @@ export const TodoItem = memo<TodoItemProps>(({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -100 }}
-      className="todo-item relative mb-4"
-      style={{
-        backgroundColor: isDarkMode ? currentTheme.colors.surface : 'white',
-        borderColor: isDarkMode ? currentTheme.colors.border : '#e5e7eb',
-        borderRadius: '0.5rem',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-        overflow: 'visible',
-        marginBottom: isExpanded ? `${Math.max((subtasks.length + 1) * 50, 100)}px` : '16px',
-        position: 'relative',
-        zIndex: isExpanded ? 10 : 1
-      }}
+      className="todo-item relative mb-4 rounded-xl shadow-lg"
+      style={containerStyle}
     >
-      <div className="p-4">
+      <div
+        className="p-4"
+        style={{
+          backgroundColor: isDarkMode ? currentTheme.colors.surface : 'white',
+          borderColor: isDarkMode ? currentTheme.colors.border : '#e5e7eb',
+        }}
+      >
         <div className="flex items-start gap-3">
           <motion.button
             whileHover={{ scale: 1.1 }}
@@ -202,31 +168,23 @@ export const TodoItem = memo<TodoItemProps>(({
                 autoFocus
               />
             ) : (
-              <div
-                className={`text-lg font-medium ${completed
-                    ? 'line-through text-gray-500 dark:text-gray-400'
-                    : 'text-gray-900 dark:text-white'
-                  }`}
-              >
+              <div className="text-lg font-medium" style={textStyle}>
                 {text}
               </div>
             )}
 
             <div className="flex flex-wrap gap-2 mt-2">
-              <span className={`badge-category`}>
+              <span className={`px-2 py-1 rounded-full text-sm ${categoryColors[category]?.bg || defaultColors.bg
+                } ${categoryColors[category]?.text || defaultColors.text}`}>
                 {category}
               </span>
-              <span className={`badge-priority badge-priority-${priority}`}>
+              <span className={`px-2 py-1 rounded-full text-sm ${priorityColors[priority]?.bg || defaultColors.bg
+                } ${priorityColors[priority]?.text || defaultColors.text}`}>
                 {priority}
               </span>
               {dueDate && (
-                <span className="badge-date">
+                <span className="px-2 py-1 rounded-full text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
                   {new Date(dueDate).toLocaleDateString()}
-                </span>
-              )}
-              {reminder.enabled && dueDate && (
-                <span className="badge-reminder">
-                  Reminder: {reminder.time}
                 </span>
               )}
             </div>
@@ -249,16 +207,28 @@ export const TodoItem = memo<TodoItemProps>(({
                 ))}
               </div>
             )}
+            {/* Button to trigger tag input if not already visible */}
+            {!showTagInput && (
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setShowTagInput(true)}
+                className="icon-button text-gray-400 dark:text-gray-500 mt-2"
+                title="Add Tag"
+              >
+                <PlusCircleIcon className="w-5 h-5" />
+              </motion.button>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={() => setShowReminderSettings(!showReminderSettings)}
+              onClick={toggleReminder}
               className={`icon-button ${reminder.enabled
-                  ? 'text-blue-500'
-                  : 'text-gray-400 dark:text-gray-500'
+                ? 'text-blue-500'
+                : 'text-gray-400 dark:text-gray-500'
                 }`}
             >
               {reminder.enabled ? <BellIcon className="w-5 h-5" /> : <BellSlashIcon className="w-5 h-5" />}
@@ -285,80 +255,16 @@ export const TodoItem = memo<TodoItemProps>(({
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={() => onToggleExpand && onToggleExpand(id)}
+              onClick={() => onViewDetails(todo.id)}
               className="icon-button text-gray-400 dark:text-gray-500"
+              title="View Details"
             >
-              {isExpanded ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
+              <EyeIcon className="w-5 h-5" />
             </motion.button>
+
+            {/* ... existing buttons ... */}
           </div>
         </div>
-
-        <AnimatePresence>
-          {isExpanded && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ 
-                opacity: 1, 
-                height: 'auto',
-                transition: { duration: 0.3 }
-              }}
-              exit={{ 
-                opacity: 0, 
-                height: 0,
-                transition: { duration: 0.2 }
-              }}
-              className="mt-4 pl-8 space-y-3 pb-4"
-            >
-              <div className="space-y-2">
-                {subtasks.map((subtask) => (
-                  <div
-                    key={subtask.id}
-                    className="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-800 rounded"
-                  >
-                    <button
-                      onClick={() => toggleSubtask(subtask.id)}
-                      className={`${subtask.completed ? 'text-primary-500' : 'text-gray-400'}`}
-                    >
-                      {subtask.completed ? (
-                        <CheckCircleSolidIcon className="w-5 h-5" />
-                      ) : (
-                        <CheckCircleIcon className="w-5 h-5" />
-                      )}
-                    </button>
-                    <span className={`flex-1 ${subtask.completed ? 'line-through text-gray-500' : ''}`}>
-                      {subtask.text}
-                    </span>
-                    <button
-                      onClick={() => deleteSubtask(subtask.id)}
-                      className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-                    >
-                      <XMarkIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <form onSubmit={handleAddSubtask} className="mt-2">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newSubtask}
-                    onChange={(e) => setNewSubtask(e.target.value)}
-                    placeholder="Add a subtask..."
-                    className="input flex-1"
-                  />
-                  <button
-                    type="submit"
-                    className="btn-primary flex items-center gap-1 px-3"
-                  >
-                    <PlusSmallIcon className="w-5 h-5" />
-                    Add
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         <AnimatePresence>
           {showReminderSettings && (

@@ -10,7 +10,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Reminder } from './ReminderSettings';
 import { notificationService } from '../services/notificationService';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { debounce } from 'lodash';
+import { TodoDetailsModal } from './TodoDetailsModal';
 
 // Declare window.electron type
 declare global {
@@ -49,6 +49,9 @@ const defaultReminder: Reminder = {
 
 export const TodoList = () => {
   const { isDarkMode, toggleDarkMode } = useTheme();
+  const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
+  const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
+
   const [todos, setTodos] = useState<Todo[]>(() => {
     const savedTodos = localStorage.getItem('todos');
     if (savedTodos) {
@@ -71,6 +74,7 @@ export const TodoList = () => {
   const [selectedTag, setSelectedTag] = useState<string | 'all'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Memoize filtered todos to prevent unnecessary re-renders
   const filteredTodos = useMemo(() => {
@@ -134,32 +138,19 @@ export const TodoList = () => {
   // Setup virtualization
   const parentRef = useRef<HTMLDivElement>(null);
   // Update the virtualizer configuration to increase item height
-  const [expandedTodos, setExpandedTodos] = useState<Record<string, boolean>>({});
 
   // Update virtualizer to use dynamic sizing
+  // Update the virtualizer configuration with larger estimate size and padding
+  // Update the virtualizer configuration with larger spacing
   // Update the virtualizer configuration
   const rowVirtualizer = useVirtualizer({
     count: filteredTodos.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: useCallback((index: number) => {
-      const todo = filteredTodos[index];
-      const baseHeight = 160; // Base height for collapsed items
-      const subtaskHeight = 40; // Height per subtask
-      const expandedHeight = baseHeight + (todo.subtasks.length * subtaskHeight);
-      return expandedTodos[todo.id] ? expandedHeight : baseHeight;
-    }, [filteredTodos, expandedTodos]),
-    overscan: 10,
+    estimateSize: () => 240, // Increased to accommodate larger spacing
+    overscan: 5,
     paddingStart: 16,
     paddingEnd: 16,
   });
-
-  // Add handler for toggling expansion
-  const handleToggleExpand = useCallback((id: string) => {
-    setExpandedTodos(prev => ({
-      ...prev,
-      [id]: !prev[id] // Toggle the expanded state
-    }));
-  }, []);
 
   useEffect(() => {
     localStorage.setItem('todos', JSON.stringify(todos));
@@ -171,15 +162,6 @@ export const TodoList = () => {
       setIsMaximized(maximized);
     });
   }, []);
-
-  // Debounce search query
-  const debouncedSetSearchQuery = useCallback(debounce((value: string) => {
-    setSearchQuery(value);
-  }, 300), []);
-
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    debouncedSetSearchQuery(e.target.value);
-  }, [debouncedSetSearchQuery]);
 
   // Check for due reminders
   useEffect(() => {
@@ -226,6 +208,30 @@ export const TodoList = () => {
 
     return () => clearInterval(interval);
   }, [todos]);
+
+  // Add view details handler
+  const handleViewDetails = useCallback((id: string) => {
+    const todo = todos.find((t) => t.id === id);
+    if (todo) {
+      setSelectedTodo(todo);
+    }
+  }, [todos]);
+
+  useEffect(() => {
+    if (selectedTodo) {
+      const updated = todos.find(t => t.id === selectedTodo.id);
+      if (updated) {
+        setSelectedTodo(updated);
+      }
+    }
+  }, [todos, selectedTodo]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [])
 
   return (
     <div
@@ -358,56 +364,55 @@ export const TodoList = () => {
           )}
         </AnimatePresence>
 
-        <div
-          ref={parentRef}
-          className="h-[calc(100vh-400px)] overflow-auto px-2"
-        >
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              position: 'relative',
-              width: '100%',
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const todo = filteredTodos[virtualRow.index];
-              if (!todo) return null; // Guard against undefined todos
-
-              return (
-                // Update the todo item container with increased padding
-                <motion.div
-                  key={todo.id}
-                  ref={(el) => {
-                    if (el) rowVirtualizer.measureElement(el);
-                  }}
-                  data-index={virtualRow.index}
-                  data-key={todo.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  style={{
-                    position: 'absolute',
-                    top: `${virtualRow.start}px`,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    padding: '16px 0', // Increased from 8px 0
-                  }}
-                >
-                  <div className="h-full bg-gray-800/40 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-700/50">
-                    <TodoItem
-                      todo={todo}
-                      onToggle={handleToggleTodo}
-                      onDelete={handleDeleteTodo}
-                      onUpdate={handleUpdateTodo}
-                      onToggleExpand={handleToggleExpand} // Pass the function here
-                      isExpanded={!!expandedTodos[todo.id]} // Pass the expanded state here
-                    />
-                  </div>
-                </motion.div>
-              );
-            })}
+        {isLoading ? (
+          <div className="flex justify-center items-center h-[calc(100vh-400px)]">
+            <LoadingSpinner isDarkMode={isDarkMode} />
           </div>
-        </div>
+        ) : (
+          <div
+            ref={parentRef}
+            className="h-[calc(100vh-400px)] overflow-auto px-2"
+          >
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                position: 'relative',
+                width: '100%',
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const todo = filteredTodos[virtualRow.index];
+                if (!todo) return null;
+
+                return (
+                  <motion.div
+                    key={todo.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    style={{
+                      position: 'absolute',
+                      top: `${virtualRow.start}px`,
+                      left: 0,
+                      width: '100%',
+                      height: `${virtualRow.size}px`,
+                      padding: '24px 0', // Increased padding
+                    }}
+                  >
+                    <div className="bg-gray-800/40 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-700/50 mb-8"> {/* Increased margin bottom */}
+                      <TodoItem
+                        todo={todo}
+                        onToggle={handleToggleTodo}
+                        onDelete={handleDeleteTodo}
+                        onUpdate={handleUpdateTodo}
+                        onViewDetails={handleViewDetails}
+                      />
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {filteredTodos.length === 0 && (
           <motion.div
@@ -428,6 +433,19 @@ export const TodoList = () => {
       </div>
 
       <StatusBar isDarkMode={isDarkMode} />
+
+      {/* Render the details modal outside the scrollable container */}
+      {selectedTodo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <TodoDetailsModal
+            todo={selectedTodo}
+            isOpen={true}
+            onToggle={() => setSelectedTodo(null)}
+            onUpdate={handleUpdateTodo}
+            onClose={() => setSelectedTodo(null)}
+          />
+        </div>
+      )}
     </div>
   );
 };

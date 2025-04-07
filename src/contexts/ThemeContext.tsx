@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Theme, themes, getThemeById } from '../themes';
+import { Theme, getThemeById } from '../themes';
 
 interface ThemeContextType {
   currentTheme: Theme;
@@ -22,23 +22,36 @@ interface ThemeProviderProps {
   children: ReactNode;
 }
 
+// Define which themes are “dark”
+const darkThemes = new Set(['dark', 'tokyo-night', 'dracula', 'nord']);
+
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [themeId, setThemeId] = useState<string>(() => {
-    return localStorage.getItem('theme') || 'dark';
-  });
-  
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('darkMode') === 'true';
+    return localStorage.getItem('theme') || 'light';
   });
 
   const currentTheme = getThemeById(themeId);
+  const isDarkMode = darkThemes.has(themeId);
 
   useEffect(() => {
     localStorage.setItem('theme', themeId);
     document.documentElement.classList.toggle('dark', isDarkMode);
-    
+
     // Apply theme colors to CSS variables
     const root = document.documentElement;
+
+    const hexToRgb = (hex: string) => {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return result ?
+        `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` :
+        '0, 0, 0';
+    };
+
+    const primaryRgb = hexToRgb(currentTheme.colors.primary);
+    for (let i = 1; i <= 9; i++) {
+      root.style.setProperty(`--color-primary-${i}00`, primaryRgb);
+    }
+
     root.style.setProperty('--color-primary', currentTheme.colors.primary);
     root.style.setProperty('--color-secondary', currentTheme.colors.secondary);
     root.style.setProperty('--color-background', currentTheme.colors.background);
@@ -54,11 +67,15 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
 
   const setTheme = (id: string) => {
     setThemeId(id);
+    // Optionally update dark mode if toggled via dropdown
+    localStorage.setItem('theme', id);
   };
 
+  // Toggle between default light and dark themes only
   const toggleDarkMode = () => {
-    setIsDarkMode(prev => !prev);
-    localStorage.setItem('darkMode', (!isDarkMode).toString());
+    const newTheme = isDarkMode ? 'light' : 'dark';
+    setThemeId(newTheme);
+    localStorage.setItem('theme', newTheme);
   };
 
   return (
@@ -66,4 +83,4 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
       {children}
     </ThemeContext.Provider>
   );
-}; 
+};
