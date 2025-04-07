@@ -1,16 +1,5 @@
 import { Reminder, ReminderTime } from '../components/ReminderSettings';
 
-// Define the notification API
-declare global {
-  interface Window {
-    electron?: {
-      showNotification: (title: string, body: string) => void;
-      scheduleNotification: (id: string, title: string, body: string, delay: number) => void;
-      cancelNotification: (id: string) => void;
-    };
-  }
-}
-
 class NotificationService {
   private static instance: NotificationService;
   private scheduledNotifications: Map<string, NodeJS.Timeout> = new Map();
@@ -45,14 +34,14 @@ class NotificationService {
     // Calculate the notification time based on the reminder settings
     const dueDateTime = new Date(dueDate);
     const now = new Date();
-    
+
     // If the due date is in the past, don't schedule a reminder
     if (dueDateTime < now) {
       return;
     }
 
     let delayInMinutes = 0;
-    
+
     switch (reminder.time) {
       case '5min':
         delayInMinutes = 5;
@@ -76,7 +65,7 @@ class NotificationService {
 
     // Calculate the notification time
     const notificationTime = new Date(dueDateTime.getTime() - delayInMinutes * 60 * 1000);
-    
+
     // If the notification time is in the past, don't schedule
     if (notificationTime < now) {
       return;
@@ -102,7 +91,7 @@ class NotificationService {
       const timeout = setTimeout(() => {
         this.showNotification('Todo Reminder', `Reminder: "${todoText}" is due in ${this.formatTimeRemaining(delayInMinutes)}`);
       }, delayInMs);
-      
+
       this.scheduledNotifications.set(notificationId, timeout);
     }
   }
@@ -116,7 +105,7 @@ class NotificationService {
       if (id.startsWith(`todo-${todoId}-`)) {
         clearTimeout(timeout);
         this.scheduledNotifications.delete(id);
-        
+
         // Also cancel via electron API if available
         if (window.electron?.cancelNotification) {
           window.electron.cancelNotification(id);

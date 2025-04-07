@@ -11,6 +11,7 @@ import { Reminder } from './ReminderSettings';
 import { notificationService } from '../services/notificationService';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { TodoDetailsModal } from './TodoDetailsModal';
+import { SoundPlayer } from './SoundPlayer'; // Add this import
 
 // Declare window.electron type
 declare global {
@@ -256,6 +257,7 @@ export const TodoList = () => {
             My Tasks
           </div>
           <div className="flex items-center gap-3">
+            <SoundPlayer /> {/* Add the SoundPlayer component here */}
             <ThemeSelector />
             <motion.button
               whileHover={{ scale: 1.1 }}
