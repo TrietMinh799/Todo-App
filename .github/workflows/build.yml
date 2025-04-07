@@ -10,10 +10,9 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
         node-version: [18.x]
 
     steps:
@@ -44,23 +43,15 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: todo-app-${{ matrix.os }}
-        path: |
-          release/*.exe
-          release/*.dmg
-          release/*.AppImage
-          release/*.zip
+        name: todo-app-windows
+        path: release/*.exe
         if-no-files-found: error
     
     - name: Create Release
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          release/*.exe
-          release/*.dmg
-          release/*.AppImage
-          release/*.zip
+        files: release/*.exe
         draft: false
         prerelease: false
       env:
