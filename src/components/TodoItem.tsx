@@ -64,6 +64,8 @@ export const TodoItem = memo<TodoItemProps>(({
   const [showReminderSettings, setShowReminderSettings] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
   const [newTag, setNewTag] = useState('');
+  const [editingCategory, setEditingCategory] = useState(false);
+  const [editingPriority, setEditingPriority] = useState(false);
 
   const {
     id,
@@ -132,6 +134,10 @@ export const TodoItem = memo<TodoItemProps>(({
       : isDarkMode ? currentTheme.colors.text : '#111827',
   }), [completed, isDarkMode, currentTheme.colors.text, currentTheme.colors.textSecondary]);
 
+  const MAX_VISIBLE_TAGS = 3;
+  const visibleTags = todo.tags.slice(0, MAX_VISIBLE_TAGS);
+  const remainingCount = todo.tags.length - MAX_VISIBLE_TAGS;
+
   return (
     <motion.div
       layout
@@ -189,9 +195,58 @@ export const TodoItem = memo<TodoItemProps>(({
               )}
             </div>
 
+            {/* Inline editing for Category and Priority */}
+            <div className="flex items-center gap-2 mt-2">
+              <div>
+                <span className="text-sm font-medium">Category: </span>
+                {editingCategory ? (
+                  <select
+                    defaultValue={todo.category}
+                    onChange={(e) => onUpdate(todo.id, { category: e.target.value as Category })}
+                    onBlur={(e) => setEditingCategory(false)}
+                    className="input text-sm"
+                  >
+                    <option value="personal">Personal</option>
+                    <option value="work">Work</option>
+                    <option value="shopping">Shopping</option>
+                    <option value="health">Health</option>
+                  </select>
+                ) : (
+                  <span
+                    className="cursor-pointer text-blue-500 hover:underline"
+                    onClick={() => setEditingCategory(true)}
+                  >
+                    {todo.category}
+                  </span>
+                )}
+              </div>
+              <div>
+                <span className="text-sm font-medium">Priority: </span>
+                {editingPriority ? (
+                  <select
+                    defaultValue={todo.priority}
+                    onChange={(e) => onUpdate(todo.id, { priority: e.target.value as Priority })}
+                    onBlur={(e) => setEditingPriority(false)}
+                    className="input text-sm"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                ) : (
+                  <span
+                    className="cursor-pointer text-green-500 hover:underline"
+                    onClick={() => setEditingPriority(true)}
+                  >
+                    {todo.priority}
+                  </span>
+                )}
+              </div>
+            </div>
+
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
-                {tags.map((tag) => (
+                {visibleTags.map((tag) => (
                   <span
                     key={tag}
                     className="badge-tag flex items-center gap-1"
@@ -205,6 +260,11 @@ export const TodoItem = memo<TodoItemProps>(({
                     </button>
                   </span>
                 ))}
+                {remainingCount > 0 && (
+                  <span className="px-2 py-1 text-xs bg-gray-600 text-white rounded">
+                    ...
+                  </span>
+                )}
               </div>
             )}
             {/* Button to trigger tag input if not already visible */}

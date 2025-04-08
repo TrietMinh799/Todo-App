@@ -6,10 +6,12 @@ import {
   BellIcon,
   BellSlashIcon,
   CalendarIcon,
-  TagIcon
+  TagIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon
 } from '@heroicons/react/24/outline';
 import { CheckCircleIcon as CheckCircleSolidIcon } from '@heroicons/react/24/solid';
-import type { Todo } from './TodoList';
+import type { Category, Priority, Todo } from './TodoList';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface TodoDetailsModalProps {
@@ -47,6 +49,15 @@ export const TodoDetailsModal: React.FC<TodoDetailsModalProps> = ({
     const updatedSubtasks = todo.subtasks.filter(subtask => subtask.id !== subtaskId);
     onUpdate(todo.id, { subtasks: updatedSubtasks });
   }, [onUpdate, todo]);
+
+  // Handler to move a tag from one index to another
+  const handleMoveTag = useCallback((oldIndex: number, newIndex: number) => {
+    if (newIndex < 0 || newIndex >= todo.tags.length) return;
+    const updatedTags = [...todo.tags];
+    const [movedTag] = updatedTags.splice(oldIndex, 1);
+    updatedTags.splice(newIndex, 0, movedTag);
+    onUpdate(todo.id, { tags: updatedTags });
+  }, [todo, onUpdate]);
 
   if (!isOpen) return null;
 
@@ -120,6 +131,43 @@ export const TodoDetailsModal: React.FC<TodoDetailsModalProps> = ({
                 </div>
               </div>
 
+              {/* Editable Category and Priority */}
+              <div className="flex gap-4 mt-4">
+                <div className="flex flex-col">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Category
+                  </label>
+                  <select
+                    value={todo.category}
+                    onChange={(e) =>
+                      onUpdate(todo.id, { category: e.target.value as Category })
+                    }
+                    className="input mt-1"
+                  >
+                    <option value="personal">Personal</option>
+                    <option value="work">Work</option>
+                    <option value="shopping">Shopping</option>
+                    <option value="health">Health</option>
+                  </select>
+                </div>
+                <div className="flex flex-col">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Priority
+                  </label>
+                  <select
+                    value={todo.priority}
+                    onChange={(e) =>
+                      onUpdate(todo.id, { priority: e.target.value as Priority })
+                    }
+                    className="input mt-1"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+              </div>
+
               {/* Dates */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -170,11 +218,46 @@ export const TodoDetailsModal: React.FC<TodoDetailsModalProps> = ({
                 <div className="space-y-2">
                   <div className="text-sm text-gray-500 dark:text-gray-400">Tags</div>
                   <div className="flex flex-wrap gap-2">
-                    {todo.tags.map(tag => (
-                      <div key={tag} className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'
-                        }`}>
+                    {todo.tags.map((tag, index) => (
+                      <div
+                        key={tag}
+                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}
+                      >
                         <TagIcon className="w-3 h-3" />
-                        {tag}
+                        <span>{tag}</span>
+                        {todo.tags.length > 1 && (
+                          <div className="flex gap-1">
+                            {index > 0 && (
+                              <button
+                                onClick={() => handleMoveTag(index, index - 1)}
+                                title="Move tag left"
+                                className="text-gray-500 hover:text-gray-700"
+                              >
+                                <ChevronLeftIcon className="w-3 h-3" />
+                              </button>
+                            )}
+                            {index < todo.tags.length - 1 && (
+                              <button
+                                onClick={() => handleMoveTag(index, index + 1)}
+                                title="Move tag right"
+                                className="text-gray-500 hover:text-gray-700"
+                              >
+                                <ChevronRightIcon className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {/* Optionally, add a delete button for each tag */}
+                        <button
+                          onClick={() => {
+                            const updatedTags = todo.tags.filter((_, i) => i !== index);
+                            onUpdate(todo.id, { tags: updatedTags });
+                          }}
+                          title="Remove tag"
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <XMarkIcon className="w-3 h-3" />
+                        </button>
                       </div>
                     ))}
                   </div>

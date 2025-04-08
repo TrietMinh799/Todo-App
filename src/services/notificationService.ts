@@ -1,4 +1,4 @@
-import { Reminder, ReminderTime } from '../components/ReminderSettings';
+import { Reminder } from '../components/ReminderSettings';
 
 class NotificationService {
   private static instance: NotificationService;
@@ -78,9 +78,9 @@ class NotificationService {
     const notificationId = `todo-${todoId}-${Date.now()}`;
 
     // Schedule the notification
-    if (window.electron?.scheduleNotification) {
+    if ((window as any).electron?.scheduleNotification) {
       // Use the electron API if available
-      window.electron.scheduleNotification(
+      (window as any).electron.scheduleNotification(
         notificationId,
         'Todo Reminder',
         `Reminder: "${todoText}" is due in ${this.formatTimeRemaining(delayInMinutes)}`,
@@ -107,8 +107,8 @@ class NotificationService {
         this.scheduledNotifications.delete(id);
 
         // Also cancel via electron API if available
-        if (window.electron?.cancelNotification) {
-          window.electron.cancelNotification(id);
+        if ((window as any).electron?.cancelNotification) {
+          (window as any).electron.cancelNotification(id);
         }
       }
     }
@@ -118,8 +118,8 @@ class NotificationService {
    * Show a notification immediately
    */
   public showNotification(title: string, body: string): void {
-    if (window.electron?.showNotification) {
-      window.electron.showNotification(title, body);
+    if ((window as any).electron?.showNotification) {
+      (window as any).electron.showNotification(title, body);
     } else if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(title, { body });
     } else if ('Notification' in window && Notification.permission !== 'denied') {

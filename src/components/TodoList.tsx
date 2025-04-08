@@ -1,6 +1,14 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, AdjustmentsHorizontalIcon, SunIcon, MoonIcon } from '@heroicons/react/24/outline';
-import { AnimatePresence, motion } from 'framer-motion';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  PlusIcon,
+  MagnifyingGlassIcon,
+  AdjustmentsHorizontalIcon,
+  SunIcon,
+  MoonIcon,
+  Bars2Icon,           // List view icon
+  Squares2X2Icon       // Grid view icon
+} from '@heroicons/react/24/outline';
+import { AnimatePresence, motion, Reorder } from 'framer-motion';
 import { TodoItem } from './TodoItem';
 import { LoadingSpinner } from './LoadingSpinner';
 import { StatusBar } from './StatusBar';
@@ -9,9 +17,8 @@ import { ThemeSelector } from './ThemeSelector';
 import { useTheme } from '../contexts/ThemeContext';
 import { Reminder } from './ReminderSettings';
 import { notificationService } from '../services/notificationService';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { SoundPlayer } from './SoundPlayer';
 import { TodoDetailsModal } from './TodoDetailsModal';
-import { SoundPlayer } from './SoundPlayer'; // Add this import
 
 // Declare window.electron type
 declare global {
@@ -50,8 +57,10 @@ const defaultReminder: Reminder = {
 
 export const TodoList = () => {
   const { isDarkMode, toggleDarkMode } = useTheme();
-  const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
   const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
+
+  // New state for view mode: "list" or "grid"
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   const [todos, setTodos] = useState<Todo[]>(() => {
     const savedTodos = localStorage.getItem('todos');
@@ -94,11 +103,10 @@ export const TodoList = () => {
     [todos]
   );
 
-  // Memoize handlers
+  // Handlers
   const handleAddTodo = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!newTodo.trim()) return;
-
     const todoId = Date.now().toString();
     const todo: Todo = {
       id: todoId,
@@ -115,7 +123,6 @@ export const TodoList = () => {
       },
       tags: [],
     };
-
     setTodos(prev => [todo, ...prev]);
     setNewTodo('');
   }, [newTodo]);
@@ -131,27 +138,23 @@ export const TodoList = () => {
   }, []);
 
   const handleUpdateTodo = useCallback((id: string, updates: Partial<Todo>) => {
-    setTodos(prev => prev.map(todo =>
-      todo.id === id ? { ...todo, ...updates } : todo
-    ));
+    setTodos(prev => {
+      const updatedTodos = prev.map(todo =>
+        todo.id === id ? { ...todo, ...updates } : todo
+      );
+      const updatedTodo = updatedTodos.find(todo => todo.id === id);
+      if (updatedTodo) {
+        // Schedule the reminder if a due date and enabled reminder exist
+        notificationService.scheduleReminder(
+          updatedTodo.id,
+          updatedTodo.text,
+          updatedTodo.dueDate,
+          updatedTodo.reminder
+        );
+      }
+      return updatedTodos;
+    });
   }, []);
-
-  // Setup virtualization
-  const parentRef = useRef<HTMLDivElement>(null);
-  // Update the virtualizer configuration to increase item height
-
-  // Update virtualizer to use dynamic sizing
-  // Update the virtualizer configuration with larger estimate size and padding
-  // Update the virtualizer configuration with larger spacing
-  // Update the virtualizer configuration
-  const rowVirtualizer = useVirtualizer({
-    count: filteredTodos.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 240, // Increased to accommodate larger spacing
-    overscan: 5,
-    paddingStart: 16,
-    paddingEnd: 16,
-  });
 
   useEffect(() => {
     localStorage.setItem('todos', JSON.stringify(todos));
@@ -172,7 +175,6 @@ export const TodoList = () => {
         if (todo.reminder.enabled && todo.dueDate) {
           const dueDate = new Date(todo.dueDate);
           let reminderTime = new Date(dueDate);
-
           switch (todo.reminder.time) {
             case '5min':
               reminderTime.setMinutes(dueDate.getMinutes() - 5);
@@ -195,18 +197,15 @@ export const TodoList = () => {
               }
               break;
           }
-
           if (now >= reminderTime && now < new Date(reminderTime.getTime() + 60000)) {
             notificationService.showNotification(
-              'Reminder', // Title
-              `Task: ${todo.text} is due soon!` // Body
+              'Reminder',
+              `Task: ${todo.text} is due soon!`
             );
           }
-
         }
       });
-    }, 60000); // Check every minute
-
+    }, 60000);
     return () => clearInterval(interval);
   }, [todos]);
 
@@ -232,7 +231,7 @@ export const TodoList = () => {
       setIsLoading(false);
     }, 500);
     return () => clearTimeout(timer);
-  }, [])
+  }, []);
 
   return (
     <div
@@ -251,21 +250,37 @@ export const TodoList = () => {
           animate={{ opacity: 1, y: 0 }}
           className="flex justify-between items-center mb-8"
         >
-          <div
-            className={`text-2xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}
-          >
+          <div className={`text-3xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
             My Tasks
           </div>
-          <div className="flex items-center gap-3">
-            <SoundPlayer /> {/* Add the SoundPlayer component here */}
+          <div className="flex items-center gap-4">
+            <SoundPlayer />
             <ThemeSelector />
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
               onClick={toggleDarkMode}
-              className={`icon-button ${isDarkMode ? 'bg-gray-800 text-yellow-400' : 'bg-white text-gray-700'}`}
+              className={`icon-button ${isDarkMode ? 'bg-gray-800 text-yellow-400' : 'bg-white text-gray-700'} shadow-md`}
             >
-              {isDarkMode ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+              {isDarkMode ? <SunIcon className="w-6 h-6" /> : <MoonIcon className="w-6 h-6" />}
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setViewMode('list')}
+              className={`icon-button ${viewMode === 'list' ? 'bg-primary-500 text-white' : 'bg-gray-200 text-gray-600'} shadow-md`}
+              title="List View"
+            >
+              <Bars2Icon className="w-6 h-6" />
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setViewMode('grid')}
+              className={`icon-button ${viewMode === 'grid' ? 'bg-primary-500 text-white' : 'bg-gray-200 text-gray-600'} shadow-md`}
+              title="Grid View"
+            >
+              <Squares2X2Icon className="w-6 h-6" />
             </motion.button>
           </div>
         </motion.div>
@@ -283,7 +298,7 @@ export const TodoList = () => {
               value={newTodo}
               onChange={(e) => setNewTodo(e.target.value)}
               placeholder="Add a new task..."
-              className="input flex-1 shadow-md hover:shadow-lg transition-all"
+              className="input flex-1 shadow-md hover:shadow-lg transition-all rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-primary-500 focus:outline-none"
             />
             <motion.button
               whileHover={{ scale: 1.05 }}
@@ -331,15 +346,15 @@ export const TodoList = () => {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="card mb-6 p-4 shadow-md hover:shadow-lg transition-all"
+              className="card mb-6 p-6 shadow-lg rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700"
             >
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium mb-2 dark:text-gray-300">Category</label>
                   <select
                     value={selectedCategory}
                     onChange={(e) => setSelectedCategory(e.target.value as Category | 'all')}
-                    className="input shadow-md hover:shadow-lg transition-all"
+                    className="input shadow-md hover:shadow-lg transition-all rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-primary-500 focus:outline-none"
                   >
                     <option value="all">All Categories</option>
                     <option value="personal">Personal</option>
@@ -353,7 +368,7 @@ export const TodoList = () => {
                   <select
                     value={selectedPriority}
                     onChange={(e) => setSelectedPriority(e.target.value as Priority | 'all')}
-                    className="input shadow-md hover:shadow-lg transition-all"
+                    className="input shadow-md hover:shadow-lg transition-all rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-primary-500 focus:outline-none"
                   >
                     <option value="all">All Priorities</option>
                     <option value="low">Low</option>
@@ -370,49 +385,47 @@ export const TodoList = () => {
           <div className="flex justify-center items-center h-[calc(100vh-400px)]">
             <LoadingSpinner isDarkMode={isDarkMode} />
           </div>
+        ) : viewMode === 'list' ? (
+          // List view with drag-to-reorder
+          <Reorder.Group axis="y" values={todos} onReorder={setTodos} className="space-y-4">
+            {filteredTodos.map((todo) => (
+              <Reorder.Item key={todo.id} value={todo}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  transition={{ duration: 0.3 }}
+                  className="todo-item"
+                >
+                  <div className="bg-gray-800/40 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-700/50">
+                    <TodoItem
+                      todo={todo}
+                      onToggle={handleToggleTodo}
+                      onDelete={handleDeleteTodo}
+                      onUpdate={handleUpdateTodo}
+                      onViewDetails={handleViewDetails}
+                    />
+                  </div>
+                </motion.div>
+              </Reorder.Item>
+            ))}
+          </Reorder.Group>
         ) : (
-          <div
-            ref={parentRef}
-            className="h-[calc(100vh-400px)] overflow-auto px-2"
-          >
-            <div
-              style={{
-                height: `${rowVirtualizer.getTotalSize()}px`,
-                position: 'relative',
-                width: '100%',
-              }}
-            >
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const todo = filteredTodos[virtualRow.index];
-                if (!todo) return null;
-
-                return (
-                  <motion.div
-                    key={todo.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    style={{
-                      position: 'absolute',
-                      top: `${virtualRow.start}px`,
-                      left: 0,
-                      width: '100%',
-                      height: `${virtualRow.size}px`,
-                      padding: '24px 0', // Increased padding
-                    }}
-                  >
-                    <div className="bg-gray-800/40 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-700/50 mb-8"> {/* Increased margin bottom */}
-                      <TodoItem
-                        todo={todo}
-                        onToggle={handleToggleTodo}
-                        onDelete={handleDeleteTodo}
-                        onUpdate={handleUpdateTodo}
-                        onViewDetails={handleViewDetails}
-                      />
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {filteredTodos.map((todo) => (
+              <div
+                key={todo.id}
+                className="flex flex-col bg-gray-100 dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-300 dark:border-gray-700 hover:shadow-xl transition-shadow"
+              >
+                <TodoItem
+                  todo={todo}
+                  onToggle={handleToggleTodo}
+                  onDelete={handleDeleteTodo}
+                  onUpdate={handleUpdateTodo}
+                  onViewDetails={handleViewDetails}
+                />
+              </div>
+            ))}
           </div>
         )}
 
@@ -420,8 +433,7 @@ export const TodoList = () => {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className={`text-center py-12 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-              }`}
+            className={`text-center py-12 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}
           >
             <div className="text-6xl mb-4">📝</div>
             <p className="text-lg mb-2">No tasks found</p>
@@ -436,7 +448,6 @@ export const TodoList = () => {
 
       <StatusBar isDarkMode={isDarkMode} />
 
-      {/* Render the details modal outside the scrollable container */}
       {selectedTodo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <TodoDetailsModal
