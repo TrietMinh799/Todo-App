@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 export type SoundType = 'rain' | 'forest' | 'cafe' | 'waves' | 'whitenoise' | 'none';
 
@@ -8,6 +8,7 @@ interface Sound {
     url: string;
 }
 
+// Update the URLs to use the correct path without 'public'
 export const sounds: Sound[] = [
     { id: 'none', name: 'No Sound', url: '' },
     { id: 'rain', name: 'Gentle Rain', url: '/sounds/rain.mp3' },
@@ -29,65 +30,90 @@ export const useSoundPlayer = () => {
     const [isPlaying, setIsPlaying] = useState<boolean>(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
+    // Initialize audio on mount
     useEffect(() => {
-        // Initialize audio element
         if (!audioRef.current) {
             audioRef.current = new Audio();
             audioRef.current.loop = true;
         }
 
-        // Save preferences to localStorage
-        localStorage.setItem('currentSound', currentSound);
-        localStorage.setItem('soundVolume', volume.toString());
-
-        // Update audio source and play state
-        const sound = sounds.find(s => s.id === currentSound);
-        if (sound && sound.url) {
-            audioRef.current.src = sound.url;
-            audioRef.current.volume = volume;
-
-            if (isPlaying) {
-                audioRef.current.play().catch(error => {
-                    console.error('Error playing audio:', error);
-                    setIsPlaying(false);
-                });
-            } else {
-                audioRef.current.pause();
-            }
-        } else {
-            // No sound selected or invalid sound
-            audioRef.current.pause();
-            setIsPlaying(false);
-        }
-
-        // Cleanup function
+        // Cleanup on unmount
         return () => {
             if (audioRef.current) {
                 audioRef.current.pause();
+                audioRef.current = null;
             }
         };
-    }, [currentSound, volume, isPlaying]);
+    }, []);
 
-    const togglePlay = () => {
-        if (currentSound === 'none') {
-            // If no sound is selected, don't toggle play state
+    // Handle sound changes with better error handling
+    useEffect(() => {
+        if (!audioRef.current) return;
+
+        const sound = sounds.find(s => s.id === currentSound);
+        if (!sound || !sound.url) {
+            audioRef.current.pause();
+            setIsPlaying(false);
             return;
         }
-        setIsPlaying(!isPlaying);
-    };
 
-    const changeSound = (soundType: SoundType) => {
+        // Save settings
+        localStorage.setItem('currentSound', currentSound);
+        localStorage.setItem('soundVolume', volume.toString());
+
+        const playSound = async () => {
+            try {
+                audioRef.current!.src = sound.url;
+                audioRef.current!.volume = volume;
+                await audioRef.current!.load();
+
+                if (isPlaying) {
+                    const playPromise = audioRef.current!.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(error => {
+                            console.error('Error playing audio:', error);
+                            setIsPlaying(false);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading audio:', error);
+                setIsPlaying(false);
+            }
+        };
+
+        playSound();
+    }, [currentSound, volume, isPlaying]);
+
+    const togglePlay = useCallback(() => {
+        if (currentSound === 'none' || !audioRef.current) return;
+
+        if (isPlaying) {
+            audioRef.current.pause();
+            setIsPlaying(false);
+        } else {
+            const playPromise = audioRef.current.play();
+            if (playPromise !== undefined) {
+                playPromise
+                    .then(() => setIsPlaying(true))
+                    .catch(error => {
+                        console.error('Error playing audio:', error);
+                        setIsPlaying(false);
+                    });
+            }
+        }
+    }, [currentSound, isPlaying]);
+
+    const changeSound = useCallback((soundType: SoundType) => {
         setCurrentSound(soundType);
         if (soundType === 'none') {
             setIsPlaying(false);
-        } else if (!isPlaying) {
-            setIsPlaying(true);
         }
-    };
+    }, []);
 
-    const adjustVolume = (newVolume: number) => {
+    const adjustVolume = useCallback((newVolume: number) => {
         setVolume(Math.max(0, Math.min(1, newVolume)));
-    };
+    }, []);
 
     return {
         currentSound,

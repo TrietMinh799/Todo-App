@@ -10,10 +10,11 @@ import {
   PlusSmallIcon,
 } from '@heroicons/react/24/outline';
 import { CheckCircleIcon as CheckCircleSolidIcon, PlusCircleIcon } from '@heroicons/react/24/solid';
-import type { Todo, Priority, Category } from './TodoList';
+import type { Todo } from './TodoList';
 import { useTheme } from '../contexts/ThemeContext';
-import { ReminderSettings, Reminder } from './ReminderSettings';
-import { EyeIcon } from '@heroicons/react/24/outline'; // Add this import
+import { Reminder } from './ReminderSettings';
+import { EyeIcon } from '@heroicons/react/24/outline';
+import { categoryColors, defaultColors, priorityColors } from '../categoryColors';
 
 // Default reminder object
 const defaultReminder: Reminder = {
@@ -27,45 +28,15 @@ interface TodoItemProps {
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, updates: Partial<Todo>) => void;
-  onViewDetails: (id: string) => void; // Add this prop
+  onViewDetails: (id: string) => void;
 }
 
-const priorityColors: Record<Priority, { bg: string; text: string }> = {
-  low: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400' },
-  medium: { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-400' },
-  high: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400' },
-};
-
-const categoryColors: Record<Category, { bg: string; text: string }> = {
-  personal: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-400' },
-  work: { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-400' },
-  shopping: { bg: 'bg-pink-100 dark:bg-pink-900/30', text: 'text-pink-700 dark:text-pink-400' },
-  health: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-400' },
-};
-
-// Default color styles for unknown categories or priorities
-const defaultColors = {
-  bg: 'bg-gray-100 dark:bg-gray-900/30',
-  text: 'text-gray-700 dark:text-gray-400'
-};
-
-// Memoize the TodoItem component
-export const TodoItem = memo<TodoItemProps>(({
-  todo,
-  onToggle,
-  onDelete,
-  onUpdate,
-  onViewDetails // Add this parameter
-}) => {
+export const TodoItem = memo<TodoItemProps>(({ todo, onToggle, onDelete, onUpdate, onViewDetails }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState(todo.text);
-  const [newSubtask, setNewSubtask] = useState('');
-  const [showReminderSettings, setShowReminderSettings] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
   const [newTag, setNewTag] = useState('');
-  const [editingCategory, setEditingCategory] = useState(false);
-  const [editingPriority, setEditingPriority] = useState(false);
 
   const {
     id,
@@ -144,205 +115,122 @@ export const TodoItem = memo<TodoItemProps>(({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -100 }}
-      className="todo-item relative mb-4 rounded-xl shadow-lg"
+      className={`group relative overflow-hidden rounded-xl border ${isDarkMode ? 'border-gray-700/50' : 'border-gray-200'
+        } transition-all duration-200 hover:shadow-lg ${completed ? 'bg-opacity-50' : ''
+        }`}
       style={containerStyle}
     >
-      <div
-        className="p-4"
-        style={{
-          backgroundColor: isDarkMode ? currentTheme.colors.surface : 'white',
-          borderColor: isDarkMode ? currentTheme.colors.border : '#e5e7eb',
-        }}
-      >
-        <div className="flex items-start gap-3">
+      <div className="p-6">
+        {/* Header Section */}
+        <div className="flex items-start gap-4">
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             onClick={() => onToggle(id)}
-            className={`icon-button ${completed ? 'text-primary-500' : 'text-gray-400 dark:text-gray-500'}`}
+            className={`flex-shrink-0 transition-colors ${completed ? 'text-primary-500' : 'text-gray-400 hover:text-primary-500'
+              }`}
           >
-            {completed ? <CheckCircleSolidIcon className="w-6 h-6" /> : <CheckCircleIcon className="w-6 h-6" />}
+            {completed ? (
+              <CheckCircleSolidIcon className="w-6 h-6" />
+            ) : (
+              <CheckCircleIcon className="w-6 h-6" />
+            )}
           </motion.button>
 
           <div className="flex-1 min-w-0">
+            {/* Title */}
             {isEditing ? (
               <input
                 type="text"
                 value={editedText}
                 onChange={(e) => setEditedText(e.target.value)}
-                className="input w-full bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-primary-500"
+                className="w-full px-2 py-1 text-lg bg-transparent border-b-2 border-primary-500 focus:outline-none"
                 autoFocus
               />
             ) : (
-              <div className="text-lg font-medium" style={textStyle}>
+              <h3
+                className={`text-lg font-medium truncate ${completed ? 'text-gray-400 line-through' : ''
+                  }`}
+                style={textStyle}
+              >
                 {text}
-              </div>
+              </h3>
             )}
 
-            <div className="flex flex-wrap gap-2 mt-2">
-              <span className={`px-2 py-1 rounded-full text-sm ${categoryColors[category]?.bg || defaultColors.bg
+            {/* Metadata */}
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${categoryColors[category]?.bg || defaultColors.bg
                 } ${categoryColors[category]?.text || defaultColors.text}`}>
                 {category}
               </span>
-              <span className={`px-2 py-1 rounded-full text-sm ${priorityColors[priority]?.bg || defaultColors.bg
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityColors[priority]?.bg || defaultColors.bg
                 } ${priorityColors[priority]?.text || defaultColors.text}`}>
                 {priority}
               </span>
               {dueDate && (
-                <span className="px-2 py-1 rounded-full text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
                   {new Date(dueDate).toLocaleDateString()}
                 </span>
               )}
             </div>
 
-            {/* Inline editing for Category and Priority */}
-            <div className="flex items-center gap-2 mt-2">
-              <div>
-                <span className="text-sm font-medium">Category: </span>
-                {editingCategory ? (
-                  <select
-                    defaultValue={todo.category}
-                    onChange={(e) => onUpdate(todo.id, { category: e.target.value as Category })}
-                    onBlur={(e) => setEditingCategory(false)}
-                    className="input text-sm"
-                  >
-                    <option value="personal">Personal</option>
-                    <option value="work">Work</option>
-                    <option value="shopping">Shopping</option>
-                    <option value="health">Health</option>
-                  </select>
-                ) : (
-                  <span
-                    className="cursor-pointer text-blue-500 hover:underline"
-                    onClick={() => setEditingCategory(true)}
-                  >
-                    {todo.category}
-                  </span>
-                )}
-              </div>
-              <div>
-                <span className="text-sm font-medium">Priority: </span>
-                {editingPriority ? (
-                  <select
-                    defaultValue={todo.priority}
-                    onChange={(e) => onUpdate(todo.id, { priority: e.target.value as Priority })}
-                    onBlur={(e) => setEditingPriority(false)}
-                    className="input text-sm"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                ) : (
-                  <span
-                    className="cursor-pointer text-green-500 hover:underline"
-                    onClick={() => setEditingPriority(true)}
-                  >
-                    {todo.priority}
-                  </span>
-                )}
-              </div>
-            </div>
-
+            {/* Tags */}
             {tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div className="flex flex-wrap gap-1.5 mt-3">
                 {visibleTags.map((tag) => (
                   <span
                     key={tag}
-                    className="badge-tag flex items-center gap-1"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
                   >
-                    {tag}
+                    #{tag}
                     <button
                       onClick={() => handleRemoveTag(tag)}
-                      className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                     >
                       <XMarkIcon className="w-3 h-3" />
                     </button>
                   </span>
                 ))}
                 {remainingCount > 0 && (
-                  <span className="px-2 py-1 text-xs bg-gray-600 text-white rounded">
-                    ...
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-600 text-white">
+                    +{remainingCount}
                   </span>
                 )}
               </div>
             )}
-            {/* Button to trigger tag input if not already visible */}
-            {!showTagInput && (
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setShowTagInput(true)}
-                className="icon-button text-gray-400 dark:text-gray-500 mt-2"
-                title="Add Tag"
-              >
-                <PlusCircleIcon className="w-5 h-5" />
-              </motion.button>
-            )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={toggleReminder}
-              className={`icon-button ${reminder.enabled
-                ? 'text-blue-500'
-                : 'text-gray-400 dark:text-gray-500'
-                }`}
-            >
-              {reminder.enabled ? <BellIcon className="w-5 h-5" /> : <BellSlashIcon className="w-5 h-5" />}
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={handleEdit}
-              className="icon-button text-gray-400 dark:text-gray-500"
-            >
-              <PencilIcon className="w-5 h-5" />
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => onDelete(id)}
-              className="icon-button text-gray-400 dark:text-gray-500"
-            >
-              <TrashIcon className="w-5 h-5" />
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => onViewDetails(todo.id)}
-              className="icon-button text-gray-400 dark:text-gray-500"
-              title="View Details"
-            >
-              <EyeIcon className="w-5 h-5" />
-            </motion.button>
-
-            {/* ... existing buttons ... */}
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <ActionButton onClick={toggleReminder} title={reminder.enabled ? "Disable Reminder" : "Enable Reminder"}>
+              {reminder.enabled ? <BellIcon className="w-4 h-4" /> : <BellSlashIcon className="w-4 h-4" />}
+            </ActionButton>
+            <ActionButton onClick={handleEdit} title="Edit">
+              <PencilIcon className="w-4 h-4" />
+            </ActionButton>
+            <ActionButton onClick={() => onDelete(id)} title="Delete">
+              <TrashIcon className="w-4 h-4" />
+            </ActionButton>
+            <ActionButton onClick={() => onViewDetails(todo.id)} title="View Details">
+              <EyeIcon className="w-4 h-4" />
+            </ActionButton>
           </div>
         </div>
 
-        <AnimatePresence>
-          {showReminderSettings && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mt-4"
-            >
-              <ReminderSettings
-                reminder={reminder}
-                onUpdate={handleReminderUpdate}
-                onClose={() => setShowReminderSettings(false)}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Add Tag Button */}
+        {!showTagInput && (
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowTagInput(true)}
+            className="mt-3 inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary-500 transition-colors"
+          >
+            <PlusCircleIcon className="w-4 h-4" />
+            Add Tag
+          </motion.button>
+        )}
 
+        {/* Tag Input Form */}
         <AnimatePresence>
           {showTagInput && (
             <motion.form
@@ -350,7 +238,7 @@ export const TodoItem = memo<TodoItemProps>(({
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               onSubmit={handleAddTag}
-              className="mt-2"
+              className="mt-3"
             >
               <div className="flex gap-2">
                 <input
@@ -358,13 +246,20 @@ export const TodoItem = memo<TodoItemProps>(({
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   placeholder="Add a tag..."
-                  className="input flex-1"
+                  className={`
+                    flex-1 px-3 py-2 text-sm rounded-md border
+                    ${isDarkMode
+                      ? 'bg-gray-800 text-gray-100 placeholder-gray-500 border-gray-700 focus:ring-primary-500'
+                      : 'bg-white text-gray-900 placeholder-gray-400 border-gray-300 focus:ring-primary-500'
+                    }
+                    focus:outline-none focus:ring-2 transition-all
+                  `}
                 />
                 <button
                   type="submit"
-                  className="btn-primary flex items-center gap-1 px-3"
+                  className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-white bg-primary-500 rounded-md hover:bg-primary-600 transition-colors"
                 >
-                  <PlusSmallIcon className="w-5 h-5" />
+                  <PlusSmallIcon className="w-4 h-4" />
                   Add
                 </button>
               </div>
@@ -375,6 +270,23 @@ export const TodoItem = memo<TodoItemProps>(({
     </motion.div>
   );
 });
+
+// Add a reusable ActionButton component
+const ActionButton: React.FC<{
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}> = ({ onClick, title, children }) => (
+  <motion.button
+    whileHover={{ scale: 1.1 }}
+    whileTap={{ scale: 0.9 }}
+    onClick={onClick}
+    className="p-1.5 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+    title={title}
+  >
+    {children}
+  </motion.button>
+);
 
 // Add display name for better debugging
 TodoItem.displayName = 'TodoItem';
