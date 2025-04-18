@@ -8,7 +8,7 @@ interface TodoEditFormProps {
   isDarkMode: boolean;
 }
 
-export const TodoEditForm = ({ todo, onUpdate, onClose, isDarkMode }: TodoEditFormProps) => {
+const TodoEditForm = ({ todo, onUpdate, onClose, isDarkMode }: TodoEditFormProps) => {
   return (
     <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg`}>
       <div className="flex justify-between items-center mb-4">
@@ -69,4 +69,6 @@ export const TodoEditForm = ({ todo, onUpdate, onClose, isDarkMode }: TodoEditFo
       </div>
     </div>
   );
-}; 
+};
+
+export default TodoEditForm;

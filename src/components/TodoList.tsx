@@ -87,7 +87,6 @@ export const TodoList = () => {
     }
     return [];
   });
-  const [newTodo, setNewTodo] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'all'>('all');
   const [selectedPriority, setSelectedPriority] = useState<Priority | 'all'>('all');
@@ -115,29 +114,6 @@ export const TodoList = () => {
   );
 
   // Handlers
-  const handleAddTodo = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTodo.trim()) return;
-    const todoId = Date.now().toString();
-    const todo: Todo = {
-      id: todoId,
-      text: newTodo.trim(),
-      completed: false,
-      category: 'personal',
-      priority: 'medium',
-      dueDate: null,
-      subtasks: [],
-      createdAt: new Date().toISOString(),
-      reminder: {
-        ...defaultReminder,
-        id: `${todoId}-reminder`,
-      },
-      tags: [],
-    };
-    setTodos(prev => [todo, ...prev]);
-    setNewTodo('');
-  }, [newTodo]);
-
   const handleAddTag = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!newTag.trim()) return;
@@ -329,51 +305,26 @@ export const TodoList = () => {
           </div>
         </motion.div>
 
-        <motion.form
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          onSubmit={handleAddTodo}
-          className="mb-8"
-        >
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={newTodo}
-              onChange={(e) => setNewTodo(e.target.value)}
-              placeholder="Add a new task..."
-              className={`
-                input flex-1 px-4 py-3 rounded-xl
-                ${isDarkMode
-                  ? 'bg-gray-800/40 backdrop-blur-sm border-gray-700/50 text-gray-100 placeholder-gray-500'
-                  : 'bg-white/80 backdrop-blur-sm border-gray-200 text-gray-900 placeholder-gray-400'
-                }
-                shadow-lg hover:shadow-xl
-                transition-all duration-200
-                focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500
-                outline-none border
-              `}
-            />
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowAddModal(true)}
-              className={`
-                px-6 py-3 rounded-xl font-medium
-                flex items-center gap-2
-                shadow-lg hover:shadow-xl
-                transition-all duration-200
-                ${isDarkMode
-                  ? 'bg-primary-500/80 hover:bg-primary-500 text-white'
-                  : 'bg-primary-500 hover:bg-primary-600 text-white'
-                }
-              `}
-            >
-              <PlusIcon className="w-5 h-5" />
-              Add Task
-            </motion.button>
-          </div>
-        </motion.form>
+        <motion.div className="mb-8">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowAddModal(true)}
+            className={`
+              px-6 py-3 rounded-xl font-medium
+              flex items-center gap-2
+              shadow-lg hover:shadow-xl
+              transition-all duration-200
+              ${isDarkMode
+                ? 'bg-primary-500/80 hover:bg-primary-500 text-white'
+                : 'bg-primary-500 hover:bg-primary-600 text-white'
+              }
+            `}
+          >
+            <PlusIcon className="w-5 h-5" />
+            Add Task
+          </motion.button>
+        </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
